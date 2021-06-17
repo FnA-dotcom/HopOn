@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="DES-Portal" uuid="13ebd8ce-68e9-4cc7-aac8-7f3a27797c43">
+    <data-source source="LOCAL" name="USA Freelance" uuid="389b2289-b7be-484d-b7e4-d662162a8915">
       <driver-ref>mysql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mysql://203.130.0.228:3306/Falcon</jdbc-url>
+      <jdbc-url>jdbc:mysql://96.73.123.69:3306/HopOn</jdbc-url>
       <driver-properties>
         <property name="autoReconnect" value="true" />
         <property name="zeroDateTimeBehavior" value="convertToNull" />

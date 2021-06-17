@@ -1,6 +1,9 @@
 package FalconSchedulers;
 
+import org.json.simple.JSONObject;
+
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.sql.*;
@@ -25,7 +28,7 @@ public class AutomaticScheduler {
         String getlocationC = "";
 
 
-        ArrayList<Double> Miles = new ArrayList<Double>();
+        ArrayList<Double> Miles = new ArrayList<>();
         Connection conn = null;
         Date dt1 = new Date();
         long timestamp = dt1.getTime();
@@ -52,7 +55,10 @@ public class AutomaticScheduler {
         int JobNatureIndex = 0;
         int ComplainId = 0;
         int JobTypeIndex = 0;
+        int CityIndex = 0;
         String ComplainNumber = "";
+        String CustomerName = "";
+        String RegistrationNum = "";
         String Latitude = "";
         String Longitude = "";
         String QueryPatch = " ";
@@ -69,10 +75,10 @@ public class AutomaticScheduler {
         LogString += " \n *********************************************************************  \n ";
         try {
             Stage = "0";
-/*            if ( SendProcessAlreadyRunning() ) {
+            if (SendProcessAlreadyRunning()) {
                 System.out.println("Unable to start Automatic Scheduler.Process is Already Running ");
                 return;
-            }*/
+            }
             FileWriter filewriter = new FileWriter("/opt/FalconLogs/SchedulerLogs/AutomaticScheduler.log", true);
             filewriter.write("\r\n Scheduler Time starts at " + new Date().toString() + "\r\n");
             conn = getConnection();
@@ -87,68 +93,95 @@ public class AutomaticScheduler {
             cStmt.close();
             LogString += " Total Tech Count  : " + TotalTechCount + " | ";
 
-            Stage = "2";
-            Query1 = "{CALL radius_check()}";
-            cStmt = conn.prepareCall(Query1);
-            rset1 = cStmt.executeQuery();
-            if (rset1.next()) {
-                RadiusCheck = rset1.getDouble(1);
-                FalconRadiusCheck = rset1.getDouble(2);
-                FalconLat = rset1.getString(3);
-                FalconLon = rset1.getString(4);
-            }
-            rset1.close();
-            cStmt.close();
-            LogString += " Radius Check  : " + RadiusCheck + " | ";
-            LogString += " Falcon Radius Check  : " + FalconRadiusCheck + " | ";
-            LogString += " Falcon Lat  : " + FalconLat + " | ";
-            LogString += " FalconLon  : " + FalconLon + " | ";
-
-            //-----------------------Agent --------------------------
-
-
-            ////--------------------------Agent End
-            //Dynamically Picking TotalJobsCount in order to implement check of 3 or more complains.
-            //Depending on the needs
-            Query1 = "{CALL TotalJobsNumber()}";
-            cStmt = conn.prepareCall(Query1);
-            rset1 = cStmt.executeQuery();
-            if (rset1.next()) {
-                TotalJobCount = rset1.getInt(1);
-            }
-            rset1.close();
-            cStmt.close();
-            LogString += " Total Job Count  : " + TotalJobCount + " | ";
-
             Stage = "3";
             //Jobs to be assigned
-            Query = " SELECT Id,JobTypeIndex,JobNatureIndex,ComplainNumber,Latitude,Longtitude " +
+            Query = " SELECT Id,JobTypeIndex,JobNatureIndex,ComplainNumber,Latitude,Longtitude,CityIndex,CustName,RegistrationNum " +
                     " FROM CustomerData WHERE AssignStatus=0 AND Latitude != '' AND Longtitude != '' ";
 
             try {
                 stmt = conn.createStatement();
                 rset = stmt.executeQuery(Query);
                 while (rset.next()) {
+                    System.out.println("**************************************START***************************************************************");
                     ComplainId = rset.getInt(1);
                     JobTypeIndex = rset.getInt(2);
                     JobNatureIndex = rset.getInt(3);
                     ComplainNumber = rset.getString(4).trim();
                     Latitude = rset.getString(5).trim();
                     Longitude = rset.getString(6).trim();
+                    CityIndex = rset.getInt(7);
+                    CustomerName = rset.getString(8).trim();
+                    RegistrationNum = rset.getString(9).trim();
 
                     LogString += " ComplainId  : " + ComplainId + " | ";
                     LogString += " JobNatureIndex  : " + JobNatureIndex + " | ";
                     LogString += " ComplainNumber  : " + ComplainNumber + " | ";
                     LogString += " Latitude  : " + Latitude + " | ";
                     LogString += " Longitude  : " + Longitude + " | ";
+                    LogString += " City Index  : " + CityIndex + " | ";
+
+                    System.out.println("City Index " + CityIndex);
+                    Stage = "2";
+
+                    //Re-Initializing All Variables
+                    RadiusCheck = 0.0;
+                    FalconRadiusCheck = 0.0;
+                    FalconLat = "";
+                    FalconLon = "";
+
+                    Query1 = "{CALL radius_check(?)}";
+                    cStmt = conn.prepareCall(Query1);
+                    cStmt.setInt(1, CityIndex);
+                    rset1 = cStmt.executeQuery();
+                    if (rset1.next()) {
+                        RadiusCheck = rset1.getDouble(1);
+                        FalconRadiusCheck = rset1.getDouble(2);
+                        FalconLat = rset1.getString(3);
+                        FalconLon = rset1.getString(4);
+                    }
+                    rset1.close();
+                    cStmt.close();
+
+                    if (RadiusCheck == 0.0)
+                        continue;
+
+                    System.out.println("ComplainId " + ComplainId);
+                    System.out.println("Radius Check " + RadiusCheck);
+                    System.out.println("Falcon Radius Check " + FalconRadiusCheck);
+                    System.out.println("Falcon Lat " + FalconLat);
+                    System.out.println("Falcon Lon " + FalconLon);
+//                    System.out.println("JobNatureIndex " + JobNatureIndex);
+
+                    LogString += " Radius Check  : " + RadiusCheck + " | ";
+                    LogString += " Falcon Radius Check  : " + FalconRadiusCheck + " | ";
+                    LogString += " Falcon Lat  : " + FalconLat + " | ";
+                    LogString += " FalconLon  : " + FalconLon + " | ";
+
+                    //Dynamically Picking TotalJobsCount in order to implement check of 3 or more complains.
+                    //Depending on the needs
+                    //Re-Initializing Variables
+                    TotalJobCount = 0;
+                    Query1 = "{CALL TotalJobsNumber(?)}";
+                    cStmt = conn.prepareCall(Query1);
+                    cStmt.setInt(1, CityIndex);
+                    rset1 = cStmt.executeQuery();
+                    if (rset1.next()) {
+                        TotalJobCount = rset1.getInt(1);
+                    }
+                    rset1.close();
+                    cStmt.close();
+
+                    System.out.println("Total Job Count " + TotalJobCount);
+                    LogString += " Total Job Count  : " + TotalJobCount + " | ";
+
                     Stage = "4";
                     System.out.println(" LOOP RUNNING TIME " + i++);
 //                    System.out.println("Complain " + ComplainId);
                     //System.out.println("Complain Latitude " + Latitude);
                     //System.out.println("Complain Longitude " + Longitude);
                     double agentdistance = 0.0d;
-                    HashMap<Integer, Double> hm = new HashMap<Integer, Double>();
-                    HashMap<Integer, Double> cm = new HashMap<Integer, Double>();
+                    HashMap<Integer, Double> hm = new HashMap<>();
+                    HashMap<Integer, Double> cm = new HashMap<>();
 
                     //Determining the Type of the technician
                     //1. Expert
@@ -162,28 +195,32 @@ public class AutomaticScheduler {
                                 " FROM MobileUsers a " +
                                 " STRAIGHT_JOIN TechnicianLocation b ON a.UserId=b.UserId AND b.CreatedDate = (SELECT max(x.CreatedDate) FROM TechnicianLocation x WHERE x.UserId=a.UserId) " +
                                 " STRAIGHT_JOIN LoginTrail c ON a.UserId=c.UserId AND c.UserType='M' " +
-                                " WHERE a.Status=0  ";
+                                " WHERE a.Status=0 AND a.CityIndex = " + CityIndex + " ";
                     } else {
                         Query1 = "SELECT a.Id,a.TechType,b.Latitude,b.Longtitude " +
                                 " FROM MobileUsers a " +
                                 " STRAIGHT_JOIN TechnicianLocation b ON a.UserId=b.UserId AND b.CreatedDate = (SELECT max(x.CreatedDate) FROM TechnicianLocation x WHERE x.UserId=a.UserId) " +
                                 " STRAIGHT_JOIN LoginTrail c ON a.UserId=c.UserId AND c.UserType='M' " +
-                                " WHERE a.Status=0 ORDER BY a.TechType ";
+                                " WHERE a.Status=0 AND a.CityIndex = " + CityIndex + " ORDER BY a.TechType ";
                     }
+//                    System.out.println("Query " + Query1 );
                     try {
                         stmt1 = conn.createStatement();
                         rset1 = stmt1.executeQuery(Query1);
                         while (rset1.next()) {
                             Stage = "5";
-                            //System.out.println("1) Tech Id " + rset1.getInt(1));
-                            //System.out.println("2) Complain Latitude " + Latitude);
-                            //System.out.println("3) Complain Longitude " + Longitude);
-                            //System.out.println("4) Tech Latitude  " + rset1.getString(3));
-                            //System.out.println("5) Tech Longitude   " + rset1.getString(4));
+//                            System.out.println("1) Tech Id " + rset1.getInt(1));
+//                            System.out.println("2) Complain Latitude " + Latitude);
+//                            System.out.println("3) Complain Longitude " + Longitude);
+//                            System.out.println("4) Tech Latitude  " + rset1.getString(3));
+//                            System.out.println("5) Tech Longitude   " + rset1.getString(4));
+
                             getlocation = getDistance1(Latitude.trim(), Longitude.trim(), rset1.getString(3), rset1.getString(4));
                             LogString += " Location  : " + getlocation + " | ";
                             System.out.println("6) get Location   " + getlocation);
+//                            System.out.println("7) City Index   " + CityIndex);
 
+                            TechCount = 0;
                             Query3 = "{CALL AssignmentCount(?)}";
                             cStmt2 = conn.prepareCall(Query3);
                             cStmt2.setInt(1, rset1.getInt(1));
@@ -194,9 +231,14 @@ public class AutomaticScheduler {
                             rset2.close();
                             cStmt2.close();
 
+                            System.out.println("Tech [" + rset1.getInt(1) + "] On hand Job Count --> " + TechCount);
                             Stage = "6";
                             LogString += " To be Assigned Tech Count  : " + rset1.getInt(1) + " | ";
                             LogString += " TechCount  : " + TechCount + " | ";
+
+                            System.out.println("Tech Count ****** " + TechCount);
+                            System.out.println("Total Job Count ****** " + TotalJobCount);
+
                             if (TechCount >= TotalJobCount) {
                                 //if ((TotalJobCount > TechCount)) {
                                 //Supportive.doLogMethodMessage(null, "Main Method - 001", "No Technician Count  ! ");
@@ -205,23 +247,30 @@ public class AutomaticScheduler {
                             Stage = "7";
                             i++;
 
-                            Double Distance = Double.parseDouble(getlocation);
+                            System.out.println("ASSIGNMENT SENTDING");
 
+                            System.out.println("FalconLat " + FalconLat);
+                            System.out.println("FalconLon " + FalconLon);
+                            System.out.println("rset1.getString(3) " + rset1.getString(3));
+                            System.out.println("rset1.getString(4) " + rset1.getString(4));
+                            System.out.println("rset1.getString(1) " + rset1.getString(1));
+
+                            Double Distance = Double.parseDouble(getlocation);
                             hm.put(rset1.getInt(1), Distance);
 
                             //For Falcon Pool we are checking and filling hash map according to the tech within the radius of falcon-i or not
                             getlocationC = getDistance1(FalconLat, FalconLon, rset1.getString(3), rset1.getString(4));
                             Double Distance2 = Double.parseDouble(getlocationC);
                             cm.put(rset1.getInt(1), Distance2);
-                            // Sorting Users in hash map
-/*                            Map<Integer, Double> sortedMapAsc = sortByComparator(hm, ASC);
+/*                            // Sorting Users in hash map
+                            Map<Integer, Double> sortedMapAsc = sortByComparator(hm, ASC);
                             for (Map.Entry<Integer, Double> entry : sortedMapAsc.entrySet()) {
                                 //System.out.println("Key : " + entry.getKey() + " Value : " + entry.getValue());
                                 hm.put(entry.getKey(), entry.getValue());
-                            }*/
+                            }
                             //printMap(hm);
                             //new work
-/*                            Map<Integer, String> map = sortByValues(hm);
+                            Map<Integer, String> map = sortByValues(hm);
                             Set set2 = map.entrySet();
                             Iterator iterator2 = set2.iterator();
                             System.out.println("First DISTANT " + Distance);
@@ -253,6 +302,8 @@ public class AutomaticScheduler {
                         System.out.flush();
                         return;
                     }
+
+                    //Job Assignment Start According to Technicians selected and sorted in hash map
                     Stage = "12";
                     int assigneAgentid = 0;
                     Double value = 0.0;
@@ -266,56 +317,68 @@ public class AutomaticScheduler {
                     Double TabVal = Double.MIN_VALUE;
                     for (Integer key : hm.keySet()) {
                         value = hm.get(key);
-                        //System.out.println("KEY  --> " + key);
-                        //System.out.println("VAL --> " + value);
+//                        System.out.println("KEY  --> " + key);
+//                        System.out.println("VAL --> " + value);
 
                         if (value < minValue) {
                             minValue = value;
                             assigneAgentid = key;
                         }
                     }
-//                    System.out.println("Assigned Technician Id --> " + assigneAgentid);
+                    System.out.println("Assigned Technician Id --> " + assigneAgentid);
                     Stage = "14";
                     LogString += " assigneAgentid  : " + assigneAgentid + " | ";
                     LogString += " minValue  : " + minValue + " | ";
                     //Second Condition Insertion
                     if (assigneAgentid != 0) {
+                        Stage = "15";
                         if (minValue <= RadiusCheck) {
+                            Stage = "16";
                             System.out.println("LESS THAN FIVE!!   " + minValue + " ------------ " + RadiusCheck + " ****** " + assigneAgentid + " * * * * " + value);
-                            String Result = RecordInsertion(conn, assigneAgentid, ComplainId, "Admin", minValue, 0);
-                            InsertionLogs(conn, assigneAgentid, ComplainId, "Admin", minValue, 0);
+                            String Result = RecordInsertion(conn, assigneAgentid, ComplainId, "Admin", minValue, 0, CityIndex);
+                            InsertionLogs(conn, assigneAgentid, ComplainId, "Admin", minValue, 0, CityIndex);
                             if (Result.equals("Success")) {
+                                Stage = "17";
 //                                Updating only those jobs who has been assigned to any tech only. Rest will not be set to assigned
                                 UpdateJobStatus(conn, ComplainNumber);
                                 UpdateInitialStatus(conn, ComplainNumber, assigneAgentid);
-                                System.out.println("Record Assigned".trim());
+//                                System.out.println("Record Assigned".trim());
+
+                                // TODO Auto-generated method stub
+                                //pushFCMNotification(CustomerName, ComplainNumber, RegistrationNum, assigneAgentid, conn);
+
                             } else {
+                                Stage = "18";
                                 System.out.println("Error while Record Assignment!!");
                                 doLogMethodMessage("Main Method - 003", "Error while Record Assignment!! ! ");
                             }
 
                         } else {
-                            System.out.println("DISTANT GREATER THAN TECH LOCATION   " + minValue + " ------------ " + RadiusCheck + " ****** " + assigneAgentid + " * * * * " + value);
+                            Stage = "19";
+//                            System.out.println("DISTANT GREATER THAN TECH LOCATION   " + minValue + " ------------ " + RadiusCheck + " ****** " + assigneAgentid + " * * * * " + value);
 
                             //New Check has been implemented
                             // Now Complains will ne assign to those technician if it is in the same area of the un-assigned complain/new complain
-                            assigneAgentid = ltr(conn, Latitude.trim(), Longitude.trim(), RadiusCheck, ComplainId, ComplainNumber, assigneAgentid, TotalJobCount);
+                            assigneAgentid = ltr(conn, Latitude.trim(), Longitude.trim(), RadiusCheck, ComplainId, ComplainNumber, assigneAgentid, TotalJobCount, CityIndex, CustomerName, RegistrationNum);
                             System.out.println("LTR AGENT ID --> " + assigneAgentid);
                             LogString += " Assigned Tech Next  : " + assigneAgentid + " | ";
                             //If no technician is found then it will go to falcon pool and will assign to any technician
                             if (assigneAgentid == 0) {
+                                Stage = "20";
                                 Double value0 = 0.0;
                                 Double value01 = 0.0;
                                 for (Integer key0 : cm.keySet()) {
+                                    Stage = "21";
                                     value0 = cm.get(key0);
                                     value01 = cm.get(key0);
-                                    System.out.println("SEC key 0 --> " + key0);
-                                    System.out.println("SEC VAL 0 --> " + value0);
-                                    System.out.println("FalconRadiusCheck --> " + FalconRadiusCheck);
+//                                    System.out.println("SEC key 0 --> " + key0);
+//                                    System.out.println("SEC VAL 0 --> " + value0);
+//                                    System.out.println("FalconRadiusCheck --> " + FalconRadiusCheck);
                                     LogString += " In Falcon Pool : key0  : " + key0 + " | ";
                                     LogString += " In Falcon Pool : value0  : " + value0 + " | ";
                                     LogString += " In Falcon Pool : FalconRadiusCheck  : " + FalconRadiusCheck + " | ";
 
+                                    Stage = "22";
                                     TechCount = 0;
                                     Query3 = "{CALL AssignmentCount(?)}";
                                     cStmt2 = conn.prepareCall(Query3);
@@ -327,33 +390,42 @@ public class AutomaticScheduler {
                                     rset2.close();
                                     cStmt2.close();
                                     LogString += " In Falcon Pool : Tech Count Next   : " + TechCount + " | ";
-
+                                    Stage = "23";
                                     //Technician in Falcon pool should have 0 jobs in their bank else it will not assign
                                     if (TechCount <= 0) {
+                                        Stage = "24";
                                         //Value0 will be in meter as falcon radius check value is in meter
                                         value0 = value0 * 1000;
                                         if (value0 <= FalconRadiusCheck) {
+                                            Stage = "25";
                                             LogString += " In Falcon Pool When its in meter : After Multiplying   : " + value0 + " | ";
 
                                             UpdateRecords(conn, key0);
-                                            String Result = RecordInsertion(conn, key0, ComplainId, "Admin", value01, 1);
-                                            InsertionLogs(conn, assigneAgentid, ComplainId, "Admin", minValue, 1);
+                                            String Result = RecordInsertion(conn, key0, ComplainId, "Admin", value01, 1, CityIndex);
+                                            InsertionLogs(conn, assigneAgentid, ComplainId, "Admin", minValue, 1, CityIndex);
                                             LogString += " In Falcon Pool When its in meter Record Assigned | ";
                                             if (Result.equals("Success")) {
+                                                Stage = "26";
                                                 //Updating only those jobs who has been assigned to any tech only. Rest will not be set to assigned
                                                 UpdateJobStatus(conn, ComplainNumber);
                                                 UpdateInitialStatus(conn, ComplainNumber, key0);
                                                 System.out.println("Record Assigned".trim());
+
+                                                // TODO Auto-generated method stub
+                                                //pushFCMNotification(CustomerName, ComplainNumber, RegistrationNum, assigneAgentid, conn);
                                             } else {
+                                                Stage = "27";
                                                 System.out.println("Error while Record Assignment!!");
                                                 doLogMethodMessage("Main Method - 004", "Error while Record Assignment!! ! ");
                                             }
                                             break;
                                         } else {
+                                            Stage = "28";
                                             System.out.println("GOING IN DISTANT GREATER THAN ELSE COND");
                                             doLogMethodMessage("Main Method - 005", "GOING IN DISTANT GREATER THAN ELSE COND!! ");
                                         }
                                     } else {
+                                        Stage = "29";
                                         System.out.println("Technician has greater count then zero!! ");
                                         doLogMethodMessage("Main Method - 005.1", "Technician has greater count then zero!! ");
                                     }
@@ -364,11 +436,13 @@ public class AutomaticScheduler {
                         System.out.println("NO TECHNICIAN ONLINE !! going for office");
                         doLogMethodMessage("Main Method - 006", "NO TECHNICIAN ONLINE !! going for office ");
                     }
+                    System.out.println("**************************************END***************************************************************");
                 }
                 rset.close();
                 stmt.close();
 
-                //******************************************* POSTPONNED WORK *****************************************************//
+                Stage = "29";
+                //******************************************* POSTPONED WORK *****************************************************//
                 int Postponed = 0;
                 int TechnicianId = 0;
                 int JobId = 0;
@@ -391,39 +465,40 @@ public class AutomaticScheduler {
                     TechnicianId = 0;
                     JobId = 0;
                     AssignmentId = 0;
-
+                    Stage = "30";
                     Postponed = rset.getInt(1);
                     TechnicianId = rset.getInt(2);
                     JobId = rset.getInt(3);
                     AssignmentId = rset.getInt(4);
-
+                    Stage = "31";
                     //if one day is passed with the postponed status then it should mark that case with 0 so that again it will be reassigned
                     if (Postponed >= 1) {
-
+                        Stage = "32";
                         int AssignmentIndex = 0;
-                        Query = "SELECT Max(Id) FROM Assignment WHERE ComplaintId = " + JobId;
-                        stmt = conn.createStatement();
-                        rset = stmt.executeQuery(Query);
-                        if (rset.next())
-                            AssignmentIndex = rset.getInt(1);
-                        rset.close();
-                        stmt.close();
-
+                        Query1 = "SELECT Max(Id) FROM Assignment WHERE ComplaintId = " + JobId;
+                        stmt1 = conn.createStatement();
+                        rset1 = stmt1.executeQuery(Query1);
+                        if (rset1.next())
+                            AssignmentIndex = rset1.getInt(1);
+                        rset1.close();
+                        stmt1.close();
+                        Stage = "33";
                         pStmt = conn.prepareStatement(
-                                "INSERT INTO PostponedLogs (TechnicianId, JobId, Status, CreatedDate,AssignmentId) " +
-                                        "VALUES (?,?,0,NOW(),?)");
+                                "INSERT INTO PostponedLogs (TechnicianId, JobId, Status, CreatedDate,AssignmentId,CityIndex) " +
+                                        "VALUES (?,?,0,NOW(),?,?)");
                         pStmt.setInt(1, TechnicianId);
                         pStmt.setInt(2, JobId);
                         pStmt.setInt(3, AssignmentIndex);
+                        pStmt.setInt(4, CityIndex);
                         pStmt.executeUpdate();
                         pStmt.close();
-
+                        Stage = "34";
                         Query1 = "UPDATE CustomerData SET AssignStatus=0,ReAssigned = 1 WHERE Id = " + JobId + " ";
                         stmt1 = conn.createStatement();
                         stmt1.executeUpdate(Query1);
                         stmt1.close();
                         LogString += " Update Query in Postpone # 1 " + Query1 + " | ";
-
+                        Stage = "35";
                         Query1 = "UPDATE Assignment SET Status = 1 WHERE Id = " + AssignmentIndex;
                         stmt1 = conn.createStatement();
                         stmt1.executeUpdate(Query1);
@@ -434,12 +509,15 @@ public class AutomaticScheduler {
                 }
                 rset.close();
                 stmt.close();
-
+                Stage = "36";
                 LogString += " \n *********************************************************************  \n ";
                 LogString(LogString);
             } catch (Exception e) {
-                System.out.println("Main try/catch " + e.getMessage() + "--- " + Stage);
+                System.out.println("Main try/catch Method " + e.getMessage() + "--- " + Stage);
                 doLogMethodMessage("Main Method - 007", "Main try/catch " + e.getMessage() + " ---- " + Stage);
+                System.out.close();
+                System.out.flush();
+                return;
             }
 
         } catch (Exception Ex) {
@@ -447,6 +525,16 @@ public class AutomaticScheduler {
             doLogMethodMessage("Main Method - 008", "Update Ends in Exception ....[\" + dt.getTime() + \"] --- " + Ex.getMessage());
             System.out.println("Outer exception ... " + "-" + Ex.getMessage());
             DumpException("main", "exp", Ex);
+            System.out.close();
+            System.out.flush();
+            return;
+        } finally {
+            try {
+                conn.close();
+                rset.close();
+                stmt.close();
+            } catch (Exception ex) {
+            }
         }
     }
 
@@ -456,9 +544,9 @@ public class AutomaticScheduler {
             //LIVE
             return DriverManager.getConnection("jdbc:mysql://203.130.0.228/Falcon?user=engro&password=smarttelecard");
             //TEST
-//            return DriverManager.getConnection("jdbc:mysql://203.130.0.239/FalconTesting?user=tabish&password=tpassword");
+            //return DriverManager.getConnection("jdbc:mysql://203.130.0.239/FalconTesting?user=tabish&password=tpassword");
         } catch (Exception e) {
-            System.out.println(e);
+            System.out.println(e.getMessage());
             DumpException("Connection Error", "exp".trim(), e);
         }
         return null;
@@ -478,7 +566,7 @@ public class AutomaticScheduler {
             }
             return count > 1;
         } catch (Exception e) {
-            System.out.println("Exception in SendSMSAppAlreadyRunning func. " + e.getMessage());
+            System.out.println("Exception in Starting the process of Falcon-I " + e.getMessage());
         }
         return false;
     }
@@ -496,17 +584,17 @@ public class AutomaticScheduler {
             filewriter.flush();
             filewriter.close();
             printwriter.close();
-        } catch (Exception localException) {
+        } catch (Exception ignored) {
         }
     }
 
-    private static String RecordInsertion(Connection conn, int UserId, int ComplainId, String AssignBy, double Distance, int RadiusFlag) {
+    private static String RecordInsertion(Connection conn, int UserId, int ComplainId, String AssignBy, double Distance, int RadiusFlag, int CityIndex) {
         PreparedStatement pStmt = null;
         Statement _sTmt = null;
         ResultSet _rSet = null;
         int _count = 0;
         String Query = "";
-        Query = "Select count(*) from Assignment Where ComplaintStatus='6' and ComplaintId='" + ComplainId + "'";
+        Query = "Select count(*) from Assignment Where ComplaintStatus='6' and ComplaintId='" + ComplainId + "' AND CityIndex = " + CityIndex;
         try {
             _sTmt = conn.createStatement();
             _rSet = _sTmt.executeQuery(Query);
@@ -560,8 +648,8 @@ public class AutomaticScheduler {
 
                 pStmt = conn.prepareStatement(
                         "INSERT INTO AssignmentHistory(UserId, ComplaintId, Status, CreatedDate, RegisterBy,ComplaintStatus, " +
-                                "AssignmentStatus,Latitude,Longtitude,ManualStatus,Distance,FalconRadius,TransferFlag) " +
-                                "VALUES (?,?,1,now(),?,?,?,?,?,0,?,0,0)");
+                                "AssignmentStatus,Latitude,Longtitude,ManualStatus,Distance,FalconRadius,TransferFlag,CityIndex) " +
+                                "VALUES (?,?,1,now(),?,?,?,?,?,0,?,0,0,?)");
 
                 pStmt.setInt(1, UserId);
                 pStmt.setInt(2, ComplainId);
@@ -571,18 +659,21 @@ public class AutomaticScheduler {
                 pStmt.setString(6, "0.0");
                 pStmt.setString(7, "0.0");
                 pStmt.setDouble(8, Distance);
+                pStmt.setInt(9, CityIndex);
                 pStmt.executeUpdate();
                 pStmt.close();
 
                 pStmt = conn.prepareStatement(
                         "INSERT INTO Assignment(UserId, ComplaintId, Status, CreatedDate, RegisterBy,ComplaintStatus, " +
-                                "AssignmentStatus,ManualStatus,Distance,FalconRadius) VALUES(?,?,0,now(),?,0,0,0,?,?)");
+                                "AssignmentStatus,ManualStatus,Distance,FalconRadius,CityIndex) " +
+                                " VALUES(?,?,0,now(),?,0,0,0,?,?,?)");
 
                 pStmt.setInt(1, UserId);
                 pStmt.setInt(2, ComplainId);
                 pStmt.setString(3, AssignBy.trim());
                 pStmt.setDouble(4, Distance);
                 pStmt.setInt(5, RadiusFlag);
+                pStmt.setInt(6, CityIndex);
                 pStmt.executeUpdate();
                 pStmt.close();
 
@@ -595,16 +686,17 @@ public class AutomaticScheduler {
     }
 
     //InsertionLogsTable
-    private static void InsertionLogs(Connection conn, int UserId, int ComplainId, String AssignBy, double Distance, int RadiusFlag) {
+    private static void InsertionLogs(Connection conn, int UserId, int ComplainId, String AssignBy, double Distance, int RadiusFlag, int CityIndex) {
         PreparedStatement pStmt = null;
         try {
             pStmt = conn.prepareStatement(
-                    "INSERT INTO Insertion_Logs(UserId, ComplaintId, CreatedDate, ComplaintStatus,Distance,RadiusFlag,Status) " +
-                            "VALUES (?,?,now(),0,?,?,0)");
+                    "INSERT INTO Insertion_Logs(UserId, ComplaintId, CreatedDate, ComplaintStatus,Distance,RadiusFlag,Status,CityIndex) " +
+                            "VALUES (?,?,now(),0,?,?,0,?)");
             pStmt.setInt(1, UserId);
             pStmt.setInt(2, ComplainId);
             pStmt.setDouble(3, Distance);
             pStmt.setInt(4, RadiusFlag);
+            pStmt.setInt(5, CityIndex);
 
             pStmt.executeUpdate();
             pStmt.close();
@@ -660,8 +752,7 @@ public class AutomaticScheduler {
         DecimalFormat f = new DecimalFormat("##.00");
         //System.out.println(f.format(distance));
         // System.out.println("The distance between two lat and long is " + distance);
-        String Sdistance = String.valueOf(f.format(distance));
-        return Sdistance;
+        return String.valueOf(f.format(distance));
 
     }
 
@@ -673,7 +764,7 @@ public class AutomaticScheduler {
         Statement stmt = null;
         ResultSet rset = null;
         String Query = "";
-        HashMap<Integer, Integer> MobileUsers = new HashMap<Integer, Integer>();
+        HashMap<Integer, Integer> MobileUsers = new HashMap<>();
         int FlagCheck = 0;
         try {
             Query = "SELECT a.Id,a.JobFlag FROM MobileUsers a " +
@@ -757,7 +848,9 @@ public class AutomaticScheduler {
         }
     }
 
-    private static int ltr(Connection conn, String Latitude, String Longtitude, Double Radius, int ComplainId, String ComplainNumber, int SelectedAgentId, int TotalJobCount) {
+    private static int ltr(Connection conn, String Latitude, String Longtitude, Double Radius,
+                           int ComplainId, String ComplainNumber, int SelectedAgentId, int TotalJobCount, int CityIndex,
+                           String CustomerName, String RegistrationNum) {
         Statement stmt = null;
         ResultSet rset = null;
         String Query = "";
@@ -766,7 +859,7 @@ public class AutomaticScheduler {
         CallableStatement AcStmt = null;
         ResultSet Arset = null;
 
-        HashMap<Integer, Double> LcrUsers = new HashMap<Integer, Double>();
+        HashMap<Integer, Double> LcrUsers = new HashMap<>();
 
         String distance = "";
         int FlagCheck = 0;
@@ -791,9 +884,10 @@ public class AutomaticScheduler {
 //                    " ComplaintStatus NOT IN (6,7,8) ) AND substr(b.CreatedDate,1,10)=substr(NOW(),1,10) ";
             //Query Change 12th July 2018
             //Technician Check is removed from the query
-            Query = " SELECT a.Latitude AS CompLat,a.Longtitude AS CompLon,b.UserId,a.Id\n" +
+            Query = " SELECT a.Latitude AS CompLat,a.Longtitude AS CompLon,b.UserId,a.Id,a.CustName,a.RegistrationNum \n" +
                     "FROM CustomerData a , Assignment b WHERE  a.Id = b.ComplaintId \n" +
-                    "AND b.ComplaintStatus NOT IN (6,7,8)  AND substr(b.CreatedDate,1,10)=substr(NOW(),1,10) ";
+                    "AND b.ComplaintStatus NOT IN (6,7,8)  AND substr(b.CreatedDate,1,10)=substr(NOW(),1,10) " +
+                    "AND a.CityIndex = " + CityIndex;
 
             //19th June 2018
             //This query will pick all jobs that are not marked as 6,7,8 status and will assign acc to min radius compared to un-assigned job
@@ -886,15 +980,17 @@ public class AutomaticScheduler {
                     LogString += " IN LTR ASSIGNED Radius : " + Radius + " | ";
                     LogString += " IN LTR ASSIGNED Technician Id : " + assigneAgentid + " | ";
                     LogString += " IN LTR ASSIGNED value : " + value + " | ";
-                    String Result = RecordInsertion(conn, assigneAgentid, ComplainId, "Admin", minValue, 0);
+                    String Result = RecordInsertion(conn, assigneAgentid, ComplainId, "Admin", minValue, 0, CityIndex);
                     //Logs Insertion
-                    InsertionLogs(conn, assigneAgentid, ComplainId, "Admin", minValue, 0);
-                    TechnicianAssigning(assigneAgentid, ComplainId, value);
+                    InsertionLogs(conn, assigneAgentid, ComplainId, "Admin", minValue, 0, CityIndex);
+                    TechnicianAssigning(assigneAgentid, ComplainId, value, CityIndex);
                     if (Result.equals("Success")) {
                         //Updating only those jobs who has been assigned to any tech only. Rest will not be set to assigned
                         UpdateJobStatus(conn, ComplainNumber);
                         UpdateInitialStatus(conn, ComplainNumber, assigneAgentid);
 //                        System.out.println("Record Assigned".trim());
+                        // TODO Auto-generated method stub
+                        // pushFCMNotification(CustomerName, ComplainNumber, RegistrationNum, assigneAgentid, conn);
                     } else {
                         System.out.println("Error while Record Assignment!!");
                         doLogMethodMessage("Ali - Bhai Function ", "Error while Record Assignment!! " + Result);
@@ -912,7 +1008,7 @@ public class AutomaticScheduler {
         return assigneAgentid;
     }
 
-    private static void TechnicianAssigning(int UserId, int ComplainId, double NewDistance) {
+    private static void TechnicianAssigning(int UserId, int ComplainId, double NewDistance, int CityIndex) {
         PreparedStatement pStmt = null;
         Statement stmt = null;
         ResultSet rset = null;
@@ -934,16 +1030,17 @@ public class AutomaticScheduler {
             stmt.close();
 
             pStmt = conn.prepareStatement(
-                    "INSERT INTO TechnicianAssigning(UserId, ComplaintId, Status, CreatedDate,Distance) " +
-                            "VALUES(?,?,0,NOW(),?)");
+                    "INSERT INTO TechnicianAssigning(UserId, ComplaintId, Status, CreatedDate,Distance,CityIndex) " +
+                            "VALUES(?,?,0,NOW(),?,?)");
 
             pStmt.setInt(1, UserId);
             pStmt.setInt(2, ComplainId);
             pStmt.setDouble(3, NewDistance);
+            pStmt.setInt(4, CityIndex);
 
             pStmt.executeUpdate();
             pStmt.close();
-        } catch (Exception E) {
+        } catch (Exception ignored) {
 
         }
     }
@@ -961,8 +1058,8 @@ public class AutomaticScheduler {
         // Here I am copying the sorted list in HashMap
         // using LinkedHashMap to preserve the insertion order
         HashMap sortedHashMap = new LinkedHashMap();
-        for (Iterator it = list.iterator(); it.hasNext(); ) {
-            Map.Entry entry = (Map.Entry) it.next();
+        for (Object aList : list) {
+            Map.Entry entry = (Map.Entry) aList;
             sortedHashMap.put(entry.getKey(), entry.getValue());
         }
         return sortedHashMap;
@@ -970,7 +1067,7 @@ public class AutomaticScheduler {
 
     private static Map<Integer, Double> sortByComparator(Map<Integer, Double> unsortMap, final boolean order) {
 
-        List<Map.Entry<Integer, Double>> list = new LinkedList<Map.Entry<Integer, Double>>(unsortMap.entrySet());
+        List<Map.Entry<Integer, Double>> list = new LinkedList<>(unsortMap.entrySet());
 
         // Sorting the list based on values
         Collections.sort(list, new Comparator<Map.Entry<Integer, Double>>() {
@@ -986,7 +1083,7 @@ public class AutomaticScheduler {
         });
 
         // Maintaining insertion order with the help of LinkedList
-        Map<Integer, Double> sortedMap = new LinkedHashMap<Integer, Double>();
+        Map<Integer, Double> sortedMap = new LinkedHashMap<>();
         for (Map.Entry<Integer, Double> entry : list) {
             sortedMap.put(entry.getKey(), entry.getValue());
         }
@@ -994,13 +1091,13 @@ public class AutomaticScheduler {
         return sortedMap;
     }
 
-    public static void printMap(Map<Integer, Double> map) {
+    private static void printMap(Map<Integer, Double> map) {
         for (Map.Entry<Integer, Double> entry : map.entrySet()) {
             System.out.println("Key : " + entry.getKey() + " Value : " + entry.getValue());
         }
     }
 
-    public static void doLogMethodMessage(String Method, String Message) {
+    private static void doLogMethodMessage(String Method, String Message) {
         try {
             String FileName = GetExceptionsLogPath(1) + GetExceptionFileName();
             java.util.Date dt = new java.util.Date();
@@ -1009,13 +1106,15 @@ public class AutomaticScheduler {
             fr.write("\r\n");
             fr.flush();
             fr.close();
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
     }
 
-    public static String GetExceptionsLogPath(int Status) {
-        String path = Status == 1 ? "/opt/Htmls/TAMAPP/ProcedureLogs/Exceptions/" : "/opt/Htmls/TAMAPP/ProcedureLogs/DailyLogs/";
-        return path;
+    private static String GetExceptionsLogPath(int Status) {
+        //Live Server
+//        String path = Status == 1 ? "/opt/Htmls/HopOn/ProcedureLogs/Exceptions/" : "/opt/Htmls/HopOn/ProcedureLogs/DailyLogs/";
+        //Testing Server
+        return Status == 1 ? "/opt/Htmls/TAMAPPTesting/ProcedureLogs/Exceptions/" : "/opt/Htmls/TAMAPPTesting/ProcedureLogs/DailyLogs/";
     }
 
     private static String GetExceptionFileName() {
@@ -1034,14 +1133,13 @@ public class AutomaticScheduler {
 
     private static Date GetDate() {
         try {
-            java.util.Date dt = new java.util.Date();
-            return dt;
+            return new Date();
         } catch (Exception e) {
             return null;
         }
     }
 
-    public static void LogString(String Message) {
+    private static void LogString(String Message) {
         try {
             String FileName = GetExceptionsLogPath(2) + GetExceptionLogFileName() + "_Log_File.log";
             java.util.Date dt = new java.util.Date();
@@ -1050,7 +1148,7 @@ public class AutomaticScheduler {
             fr.write("\r\n");
             fr.flush();
             fr.close();
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
     }
 
@@ -1067,4 +1165,68 @@ public class AutomaticScheduler {
             return "invalid filename " + e.getMessage();
         }
     }
+
+    private static void pushFCMNotification(String CustomerName, String ComplainNumber, String RegistrationNumber, int UserId, Connection conn) throws Exception {
+        Statement stmt = null;
+        ResultSet rset = null;
+        String Query = "";
+        String FBTokeId = "";
+        final String API_URL_FCM = "https://fcm.googleapis.com/fcm/send";
+//        final String SERVER_KEY_FCM = "AAAAfQ4xSiI:APA91bHc948F80C73r5SUh-u9TttqalLEQCJWSPWk5sPNCs8fPHXZ0JLAVQ2MEOEVnpSztDuGcpLQNJEE22mNu1tjZbHKml5_GoQhdFHLAn8iO4P033uKxc2-ZbvyJjMAgkKw-Tkn_lu";
+        final String SERVER_KEY_FCM = "AAAAelEk6E8:APA91bFnuyiQhKIevOQTPHBARSWINI9C7YyUtOBAdHw2TksLwG9j59pOmDAZpfmSrlfZmqT5glJGR6cWiPYtFYQyOcDw1f5a0RqjXejDERs_x9Urd07yrF3w71AvnP_ErTjMlgqVfzRPVbAmTYsNj9w9QEUM91mqZw";
+
+        try {
+
+            //For Technicians
+/*            Query = "SELECT FBTokenId FROM UserBindageFB WHERE UserId = " + UserId;
+            stmt = conn.createStatement();
+            rset = stmt.executeQuery(Query);
+            if (rset.next())
+                FBTokeId = rset.getString(1);
+            rset.close();
+            stmt.close();*/
+
+            //Husnain
+//            FBTokeId = "cJhxnOYVs5A:APA91bEft2n4tx7kjEu83ZsShAMzzEzXk0_6bMcyWYVX1qKJlfQXZbaABL6kMCO4Owsh89bPmaIIqSmBS80IyEPDaHB1MEeIlJWKHvIcmwAdL9lMUoFM5WmzELUY5OSRfzVEa5YdSiZ5B_OZ3mviC_QIrHfMwstTQQ";
+            //Anum
+            // FBTokeId = "cwh1bBwww3M:APA91bEmsMrovB2fVsXmZxFpXLjkb60yTpMJkpZiRKCFvT607GayjO_64sY4bNrY1vwuvoCre1qsVsb0AqP797IRwGEMyVWfrP49sMyk4hkCtBdCkzruM3-Aj_p7e27iwGA7gBY0orZl";
+            //Uzair
+            //FBTokeId = "dZPGukBfsFg:APA91bGAHL-TiYgjjNyzVIrvSLPw-pdOpOvR66GN082YZKVteETQncvtVk4oL-GKT-SRaCfJW6s0yBeSNxwTnPNsngH-Ww98BkvZsV8tVzAUOt4BiZXelOa10IawXbD-vKOVEi1ICj18";
+            URL url = new URL(API_URL_FCM);
+            HttpURLConnection HttpConn = (HttpURLConnection) url.openConnection();
+
+            HttpConn.setUseCaches(false);
+            HttpConn.setDoInput(true);
+            HttpConn.setDoOutput(true);
+            HttpConn.setRequestMethod("POST");
+            HttpConn.setRequestProperty("Authorization", "key=" + SERVER_KEY_FCM);
+            HttpConn.setRequestProperty("Content-Type", "application/json");
+            JSONObject data = new JSONObject();
+            data.put("to", FBTokeId.trim());
+            JSONObject info = new JSONObject();
+            info.put("title", "Job Assignment"); // Notification title
+            info.put("body", "New Job has been assigned to you\nCustomer Name : " + CustomerName + "\nJob # : " + ComplainNumber + "\nReg # : " + RegistrationNumber + " "); // Notification body
+            info.put("sound", "default"); // Notification Sound
+            data.put("notification", info);
+            System.out.println(data.toJSONString());
+            OutputStreamWriter wr = new OutputStreamWriter(HttpConn.getOutputStream());
+            wr.write(data.toString());
+            wr.flush();
+            wr.close();
+            int responseCode = HttpConn.getResponseCode();
+//            System.out.println("Response Code : " + responseCode);
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(HttpConn.getInputStream()));
+            String inputLine;
+            StringBuffer response = new StringBuffer();
+
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+        } catch (Exception e) {
+            System.out.print(e.getMessage());
+        }
+    }
+
 }

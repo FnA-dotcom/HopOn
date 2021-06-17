@@ -1,8 +1,5 @@
 package FalconSchedulers;
 
-import java.util.*;
-import java.util.Map.Entry;
-
 public class Experimental {
     /**
      * @param args
@@ -37,7 +34,7 @@ public class Experimental {
         }*/
 
 
-
+/*
         HashMap<String, Integer> hm = new HashMap<String, Integer>();
         HashMap<String, Integer> hm1 = new HashMap<String, Integer>();
 
@@ -62,6 +59,20 @@ public class Experimental {
             System.out.println(entry.getValue());
             hm1.put(entry.getKey(), entry.getValue());
 
-        }
+        }*/
+//int a = 5;
+//int b = 9;
+//int c = 3;
+//
+//int Ans = (a == 1 ? -1 : (b == 2 ? c : -2));
+//System.out.println(Ans);
+//    }
+        String DOB = "['code':'0', 'desc':'User Subscribed.']";
+        DOB = "['code':'-1', 'desc':'Subscriber Already Subscribed.']";
+        System.out.println(DOB.substring(2, 6));
+        System.out.println(DOB.substring(9, 10));
+        System.out.println(DOB.substring(9, 11));
+        System.out.println(DOB.substring(9, 11).length());
+        System.out.println(DOB.length());
     }
 }
